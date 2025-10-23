@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+.eggs/
+parts/
+sdist/
+wheels/
+pip-wheel-metadata/
+
+# Virtual environment
+*.env
+.env
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter / notebooks checkpoints
+.ipynb_checkpoints
+
+# VS Code
+.vscode/
+
+# Airflow
+airflow_settings.yaml
+airflow_settings.json
+logs/
+dags/__pycache__/
+plugins/__pycache__/
+unittests.cfg
+
+# Docker
+**/__pycache__/
+tmp/
+*.log
+*.pid
+
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Astronomer (.astro)
+.astro/
+
+# Local configurations
+*.local
+*.config
+*.bak
