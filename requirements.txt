@@ -1,1 +1,14 @@
 # Astro Runtime includes the following pre-installed providers packages: https://www.astronomer.io/docs/astro/runtime-image-architecture#provider-packages
+# Only packages your DAG scripts need
+boto3
+s3fs
+tensorflow-cpu
+numpy
+pandas
+scikit-learn
+opencv-python
+Pillow
+mlflow==2.16.2
+prometheus-client
+matplotlib
+seaborn
