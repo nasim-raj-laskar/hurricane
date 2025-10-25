@@ -8,5 +8,4 @@ pandas
 scikit-learn
 opencv-python
 Pillow
-mlflow==2.16.2
 prometheus-client
