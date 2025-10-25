@@ -7,7 +7,8 @@ from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Separa
 from tensorflow.keras.callbacks import EarlyStopping                                                                                # type: ignore
 import warnings  
 import boto3
-import zipfile               
+import zipfile
+from datetime import datetime               
 from dotenv import load_dotenv                                                                                                   # Load environment variables                                                                                                    # Suppress warnings
 warnings.filterwarnings("ignore", category=UserWarning)                                                                             
 
@@ -22,30 +23,25 @@ LOCAL_ZIP = os.path.join(DATA_DIR, 'dataset.zip')
 # Ensure /tmp/data exists
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# Download dataset from S3
 def download_and_extract_s3_dataset():
-    print("📥 Downloading dataset from S3...")
+    print("Downloading dataset from S3...")
     s3 = boto3.client('s3')
     s3.download_file(S3_BUCKET, S3_KEY, LOCAL_ZIP)
-    print("✅ Download complete!")
+    print("Download complete!")
 
-    print("📦 Extracting dataset...")
+    print("Extracting dataset...")
     with zipfile.ZipFile(LOCAL_ZIP, 'r') as zip_ref:
         zip_ref.extractall(DATA_DIR)
-    print("✅ Extraction complete!")
+    print("Extraction complete!")
 
-    # Base path after extraction
-    base_dir = os.path.join(DATA_DIR, "dataset", "Satellite Images of Hurricane Damage")
-
-    # Print for verification
-    print(f"📂 Using dataset base path: {base_dir}")
-    print("Subfolders:", os.listdir(base_dir))
-
+    # Return extracted base directory
+    extracted_root = os.path.join(DATA_DIR, 'dataset')
     return {
-        "train": os.path.join(base_dir, "train_another"),
-        "val": os.path.join(base_dir, "validation_another"),
-        "test": os.path.join(base_dir, "test")
+        "train": os.path.join(extracted_root, "train_another"),
+        "val": os.path.join(extracted_root, "validation_another"),
+        "test": os.path.join(extracted_root, "test")
     }
-
 
 
 # Parameters
@@ -142,6 +138,18 @@ def save_model(model, path="hurricane.h5"):
     model.save(path)
     print(f"Model saved as {path}")
 
+#Save model to S3 with timestamp
+def save_model_to_s3(model, bucket=S3_BUCKET):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_path = f"hurricane_{timestamp}.h5"
+    model.save(model_path)
+    
+    s3 = boto3.client('s3')
+    s3.upload_file(model_path, bucket, f"models/{model_path}")
+    print(f"Model uploaded to s3://{bucket}/models/{model_path}")
+    
+    os.remove(model_path)  # Clean up local file
+
 # Main
 if __name__ == "__main__":
     dirs = download_and_extract_s3_dataset()
@@ -150,3 +158,4 @@ if __name__ == "__main__":
     model, history = train_model(train_ds, val_ds, epochs=5)
     evaluate(model, test_ds)
     save_model(model, path="hurricane.h5")
+    save_model_to_s3(model)
