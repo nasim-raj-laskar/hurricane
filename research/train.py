@@ -9,7 +9,7 @@ import warnings
 import boto3
 import zipfile
 from datetime import datetime               
-from dotenv import load_dotenv                                                                                                   # Load environment variables                                                                                                    # Suppress warnings
+from dotenv import load_dotenv                                                                                                      # Load environment variables                                                                                                    # Suppress warnings
 warnings.filterwarnings("ignore", category=UserWarning)                                                                             
 
 load_dotenv()
@@ -133,7 +133,7 @@ def evaluate(model, test_ds):
     print(f"Test Accuracy: {acc*100:.2f}%")
     return loss, acc
 
-#Save model
+#Save model to local
 def save_model(model, path="hurricane.h5"):
     model.save(path)
     print(f"Model saved as {path}")
@@ -148,7 +148,7 @@ def save_model_to_s3(model, bucket=S3_BUCKET):
     s3.upload_file(model_path, bucket, f"models/{model_path}")
     print(f"Model uploaded to s3://{bucket}/models/{model_path}")
     
-    os.remove(model_path)  # Clean up local file
+    os.remove(model_path)  # Clean up
 
 # Main
 if __name__ == "__main__":
