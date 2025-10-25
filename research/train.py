@@ -5,15 +5,48 @@ import tensorflow as tf
 from tensorflow.keras import Sequential,Input                                                                                       # type: ignore
 from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, SeparableConv2D, GlobalAveragePooling2D, Rescaling        # type: ignore
 from tensorflow.keras.callbacks import EarlyStopping                                                                                # type: ignore
-import warnings                                                                                                                     # Suppress warnings
+import warnings  
+import boto3
+import zipfile               
+from dotenv import load_dotenv                                                                                                   # Load environment variables                                                                                                    # Suppress warnings
 warnings.filterwarnings("ignore", category=UserWarning)                                                                             
 
-# Paths
-dirs = {
-    "train": r'X:\nasim_xhqpjmy\Code\MLops\hurricane-damage\dataset\train_another',                                                 #train dataset path
-    "val": r'X:\nasim_xhqpjmy\Code\MLops\hurricane-damage\dataset\validation_another',                                              #validation dataset path
-    "test": r'X:\nasim_xhqpjmy\Code\MLops\hurricane-damage\dataset\test'                                                            #test dataset path
-}
+load_dotenv()
+
+# AWS S3 Configuration
+S3_BUCKET = 'hurricane-damage-data'
+S3_KEY = 'dataset.zip'
+DATA_DIR = '/tmp/data'  
+LOCAL_ZIP = os.path.join(DATA_DIR, 'dataset.zip')
+
+# Ensure /tmp/data exists
+os.makedirs(DATA_DIR, exist_ok=True)
+
+def download_and_extract_s3_dataset():
+    print("📥 Downloading dataset from S3...")
+    s3 = boto3.client('s3')
+    s3.download_file(S3_BUCKET, S3_KEY, LOCAL_ZIP)
+    print("✅ Download complete!")
+
+    print("📦 Extracting dataset...")
+    with zipfile.ZipFile(LOCAL_ZIP, 'r') as zip_ref:
+        zip_ref.extractall(DATA_DIR)
+    print("✅ Extraction complete!")
+
+    # Base path after extraction
+    base_dir = os.path.join(DATA_DIR, "dataset", "Satellite Images of Hurricane Damage")
+
+    # Print for verification
+    print(f"📂 Using dataset base path: {base_dir}")
+    print("Subfolders:", os.listdir(base_dir))
+
+    return {
+        "train": os.path.join(base_dir, "train_another"),
+        "val": os.path.join(base_dir, "validation_another"),
+        "test": os.path.join(base_dir, "test")
+    }
+
+
 
 # Parameters
 IMG_SIZE = (128, 128)
@@ -21,31 +54,31 @@ BATCH = 32
 
 # Dataset loader
 def load_ds(path):
-    return tf.keras.preprocessing.image_dataset_from_directory(path, image_size=IMG_SIZE, batch_size=BATCH)
+    return tf.keras.preprocessing.image_dataset_from_directory(
+        path, image_size=IMG_SIZE, batch_size=BATCH
+    )
 
-train_ds, val_ds, test_ds = map(load_ds, [dirs["train"], dirs["val"], dirs["test"]])
+# #Augmentation 
+# def augment(image, label):
+#     image = tf.image.random_flip_left_right(image)
+#     image = tf.image.random_brightness(image, max_delta=0.1)
+#     # optional zoom simulation (light)
+#     scale = tf.random.uniform([], 0.9, 1.1)
+#     new_size = tf.cast(tf.convert_to_tensor(IMG_SIZE, dtype=tf.float32) * scale, tf.int32)
+#     image = tf.image.resize(image, new_size)
+#     image = tf.image.resize_with_crop_or_pad(image, IMG_SIZE[0], IMG_SIZE[1])
+#     return image, label
 
-#Augmentation 
-def augment(image, label):
-    image = tf.image.random_flip_left_right(image)
-    image = tf.image.random_brightness(image, max_delta=0.1)
-    # optional zoom simulation (light)
-    scale = tf.random.uniform([], 0.9, 1.1)
-    new_size = tf.cast(tf.convert_to_tensor(IMG_SIZE, dtype=tf.float32) * scale, tf.int32)
-    image = tf.image.resize(image, new_size)
-    image = tf.image.resize_with_crop_or_pad(image, IMG_SIZE[0], IMG_SIZE[1])
-    return image, label
+# # Apply augmentation only to training set
+# AUTOTUNE = tf.data.AUTOTUNE
+# train_ds = (train_ds
+#             .map(augment, num_parallel_calls=AUTOTUNE)
+#             .cache()
+#             .shuffle(1000)
+#             .prefetch(buffer_size=AUTOTUNE))
 
-# Apply augmentation only to training set
-AUTOTUNE = tf.data.AUTOTUNE
-train_ds = (train_ds
-            .map(augment, num_parallel_calls=AUTOTUNE)
-            .cache()
-            .shuffle(1000)
-            .prefetch(buffer_size=AUTOTUNE))
-
-val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
-test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
+# val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
+# test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
 #Define Model
 def build_cnn(input_shape=(128, 128, 3)):
@@ -109,8 +142,11 @@ def save_model(model, path="hurricane.h5"):
     model.save(path)
     print(f"Model saved as {path}")
 
-# Main execution
+# Main
 if __name__ == "__main__":
-    model, history = train()
+    dirs = download_and_extract_s3_dataset()
+    train_ds, val_ds, test_ds = map(load_ds, [dirs["train"], dirs["val"], dirs["test"]])
+
+    model, history = train_model(train_ds, val_ds, epochs=5)
     evaluate(model, test_ds)
     save_model(model, path="hurricane.h5")

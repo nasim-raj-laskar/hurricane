@@ -7,6 +7,5 @@ apache-airflow-providers-amazon
 # numpy
 # pandas
 # scikit-learn
-# opencv-python
-# Pillow
+# python-dotenv 
 # prometheus-client
