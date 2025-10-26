@@ -1,4 +1,4 @@
-FROM quay.io/astronomer/astro-runtime:11.20.0-ubi9-python-3.11-slim
+FROM astrocrpublic.azurecr.io/runtime:3.1-2
 # Copy requirements and install additional packages
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
