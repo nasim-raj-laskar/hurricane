@@ -1,14 +1,15 @@
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.hooks.base import BaseHook
+from airflow import DAG #type:ignore
+from airflow.operators.python import PythonOperator #type:ignore
+from airflow.hooks.base import BaseHook #type:ignore
 from datetime import datetime, timedelta
 import os
+import shutil
 import boto3
 import zipfile
 import tensorflow as tf
-from tensorflow.keras import Sequential, Input
-from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, SeparableConv2D, GlobalAveragePooling2D, Rescaling
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras import Sequential, Input #type:ignore
+from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, SeparableConv2D, GlobalAveragePooling2D, Rescaling #type:ignore
+from tensorflow.keras.callbacks import EarlyStopping #type:ignore
 import warnings
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -21,7 +22,7 @@ S3_KEY = 'dataset.zip'
 DATA_DIR = '/tmp/data'
 LOCAL_ZIP = os.path.join(DATA_DIR, 'dataset.zip')
 IMG_SIZE = (128, 128)
-BATCH = 32
+BATCH = 16
 
 default_args = {
     'owner': 'hurricane-team',
@@ -60,6 +61,20 @@ def load_datasets(**context):
         "test": os.path.join(root, "test")
     }
 
+    # Load datasets with caching & prefetching for performance
+    train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+        dirs["train"], image_size=IMG_SIZE, batch_size=BATCH
+    ).cache().prefetch(tf.data.AUTOTUNE)
+
+    val_ds = tf.keras.preprocessing.image_dataset_from_directory(
+        dirs["val"], image_size=IMG_SIZE, batch_size=BATCH
+    ).cache().prefetch(tf.data.AUTOTUNE)
+
+    test_ds = tf.keras.preprocessing.image_dataset_from_directory(
+        dirs["test"], image_size=IMG_SIZE, batch_size=BATCH
+    ).cache().prefetch(tf.data.AUTOTUNE)
+
+    # Save preloaded dataset paths in XCom
     return dirs
 
 
@@ -88,13 +103,16 @@ def build_and_train(**context):
     )
 
     train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["train"], image_size=IMG_SIZE, batch_size=BATCH)
+        dirs["train"], image_size=IMG_SIZE, batch_size=BATCH
+    ).cache().prefetch(tf.data.AUTOTUNE)
+
     val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["val"], image_size=IMG_SIZE, batch_size=BATCH)
+        dirs["val"], image_size=IMG_SIZE, batch_size=BATCH
+    ).cache().prefetch(tf.data.AUTOTUNE)
 
     es = EarlyStopping(patience=3, restore_best_weights=True)
-    
-    model.fit(train_ds, validation_data=val_ds, epochs=5, callbacks=[es])
+
+    model.fit(train_ds, validation_data=val_ds, epochs=5, callbacks=[es],verbose=2)
     model.save('/tmp/trained_model.h5')
 
     return '/tmp/trained_model.h5'
@@ -105,9 +123,12 @@ def evaluate_model(**context):
 
     model = tf.keras.models.load_model('/tmp/trained_model.h5')
     test_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["test"], image_size=IMG_SIZE, batch_size=BATCH)
+        dirs["test"], image_size=IMG_SIZE, batch_size=BATCH
+    ).cache().prefetch(tf.data.AUTOTUNE)
 
     loss, acc = model.evaluate(test_ds)
+    
+    # Push metrics to XCom for UI visibility
     return {'accuracy': acc, 'loss': loss}
 
 
@@ -121,13 +142,17 @@ def save_model_s3():
     s3.upload_file(model_path, S3_BUCKET, f"models/{model_path}")
     os.remove(model_path)
 
+    # Auto-remove /tmp/data to free space
+    if os.path.exists(DATA_DIR):
+        shutil.rmtree(DATA_DIR)
+
     return f"s3://{S3_BUCKET}/models/{model_path}"
 
 
 dag = DAG(
-    'hurricane_damage_training_v2',
+    'hurricane_damage_training_v3',
     default_args=default_args,
-    description='Train hurricane damage detection model (simplified DAG)',
+    description='Train hurricane damage detection model with caching, cleanup, and metrics',
     schedule=None,
     catchup=False
 )
