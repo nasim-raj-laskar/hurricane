@@ -6,5 +6,7 @@ apache-airflow-providers-amazon
 tensorflow
 numpy
 pandas
+mlflow
+dagshub
 python-dotenv 
 prometheus-client

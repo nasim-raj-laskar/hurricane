@@ -1,24 +1,11 @@
-from airflow import DAG #type:ignore
-from airflow.operators.python import PythonOperator #type:ignore
-from airflow.hooks.base import BaseHook #type:ignore
+from airflow import DAG                                       # type: ignore
+from airflow.operators.python import PythonOperator           # type: ignore
+from airflow.hooks.base import BaseHook                       # type: ignore
 from datetime import datetime, timedelta
-import os
-import shutil
-import boto3
-import zipfile
-import tensorflow as tf
-from tensorflow.keras import Sequential, Input #type:ignore
-from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, SeparableConv2D, GlobalAveragePooling2D, Rescaling #type:ignore
-from tensorflow.keras.callbacks import EarlyStopping #type:ignore
-import warnings
+import os, zipfile, boto3
 
-warnings.filterwarnings("ignore", category=UserWarning)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-tf.config.run_functions_eagerly(True)
-
-# Configuration
+# CONFIG
 S3_BUCKET = 'hurricane-damage-data'
-S3_KEY = 'dataset.zip'
 DATA_DIR = '/tmp/data'
 LOCAL_ZIP = os.path.join(DATA_DIR, 'dataset.zip')
 IMG_SIZE = (128, 128)
@@ -31,6 +18,7 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
+#task-1
 def download_data():
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -43,15 +31,14 @@ def download_data():
         region_name=conn.extra_dejson.get('region_name', 'eu-north-1')
     )
 
-    s3.download_file(S3_BUCKET, S3_KEY, LOCAL_ZIP)
-
+    s3.download_file(S3_BUCKET, 'dataset.zip', LOCAL_ZIP)
     with zipfile.ZipFile(LOCAL_ZIP, 'r') as zip_ref:
         zip_ref.extractall(DATA_DIR)
 
-    extracted_root = os.path.join(DATA_DIR, 'dataset')
-    return extracted_root
+    return os.path.join(DATA_DIR, 'dataset')
 
 
+#task-2
 def load_datasets(**context):
     root = context["task_instance"].xcom_pull(task_ids='download_data')
 
@@ -61,26 +48,48 @@ def load_datasets(**context):
         "test": os.path.join(root, "test")
     }
 
-    # Load datasets with caching & prefetching for performance
-    train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["train"], image_size=IMG_SIZE, batch_size=BATCH
-    ).cache().prefetch(tf.data.AUTOTUNE)
-
-    val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["val"], image_size=IMG_SIZE, batch_size=BATCH
-    ).cache().prefetch(tf.data.AUTOTUNE)
-
-    test_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["test"], image_size=IMG_SIZE, batch_size=BATCH
-    ).cache().prefetch(tf.data.AUTOTUNE)
-
-    # Save preloaded dataset paths in XCom
     return dirs
 
 
+#task-3
 def build_and_train(**context):
+    import mlflow
+    import tensorflow as tf
+    from tensorflow.keras import Sequential, Input                                                                                         #type:ignore
+    from tensorflow.keras.layers import (Dense, Dropout, Conv2D, MaxPooling2D,SeparableConv2D, GlobalAveragePooling2D, Rescaling)          #type:ignore
+    import warnings
+    warnings.filterwarnings("ignore")
+
+    conn = BaseHook.get_connection("mlflow_dagshub")
+
+    os.environ["MLFLOW_TRACKING_USERNAME"] = conn.login
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = conn.password
+    os.environ["MLFLOW_TRACKING_URI"] = conn.extra_dejson.get(
+        "tracking_uri", "https://dagshub.com/nasim-raj-laskar/hurricane.mlflow"
+    )
+
+    print("[INFO] Using Dagshub MLflow Auth:")
+    print(" - User:", os.getenv("MLFLOW_TRACKING_USERNAME"))
+    print(" - URI:", os.getenv("MLFLOW_TRACKING_URI"))
+
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    mlflow.set_experiment("hurricane_damage_training_v5")
+
+    #sanity check
+    print("MLFLOW_TRACKING_USERNAME:", os.getenv("MLFLOW_TRACKING_USERNAME"))
+    print("MLFLOW_TRACKING_PASSWORD:", os.getenv("MLFLOW_TRACKING_PASSWORD")[:4], "***")
+    print("MLFLOW_TRACKING_URI:", os.getenv("MLFLOW_TRACKING_URI"))
+
     dirs = context['task_instance'].xcom_pull(task_ids='load_datasets')
 
+    train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+        dirs["train"], image_size=IMG_SIZE, batch_size=BATCH
+    )
+    val_ds = tf.keras.preprocessing.image_dataset_from_directory(
+        dirs["val"], image_size=IMG_SIZE, batch_size=BATCH
+    )
+
+    #Model
     model = Sequential([
         Input(shape=(128, 128, 3)),
         Rescaling(1./255),
@@ -96,71 +105,100 @@ def build_and_train(**context):
     ])
 
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        optimizer=tf.keras.optimizers.Adam(0.001),
         loss='binary_crossentropy',
-        metrics=['accuracy'],
-        run_eagerly=True
+        metrics=['accuracy']
     )
 
-    train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["train"], image_size=IMG_SIZE, batch_size=BATCH
-    ).cache().prefetch(tf.data.AUTOTUNE)
+    #MLflow 
+    with mlflow.start_run(run_name="hurricane_training") as run:
+        history = model.fit(train_ds, validation_data=val_ds, epochs=5)
 
-    val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["val"], image_size=IMG_SIZE, batch_size=BATCH
-    ).cache().prefetch(tf.data.AUTOTUNE)
+        mlflow.log_params({
+            "epochs": 5,
+            "batch_size": BATCH,
+            "img_size": IMG_SIZE,
+            "optimizer": "Adam",
+            "learning_rate": 0.001
+        })
+        mlflow.log_metric("train_accuracy", history.history['accuracy'][-1] * 100)
+        mlflow.log_metric("val_accuracy", history.history['val_accuracy'][-1] * 100)
+        mlflow.log_metric("train_loss", history.history['loss'][-1] * 100)
+        mlflow.log_metric("val_loss", history.history['val_loss'][-1] * 100)
 
-    es = EarlyStopping(patience=3, restore_best_weights=True)
+        model.save('/tmp/trained_model.h5')
+        mlflow.log_artifact('/tmp/trained_model.h5', artifact_path="model")
 
-    model.fit(train_ds, validation_data=val_ds, epochs=5, callbacks=[es],verbose=2)
-    model.save('/tmp/trained_model.h5')
+        # Push run_id for next tasks
+        context['task_instance'].xcom_push(key='run_id', value=run.info.run_id)
 
-    return '/tmp/trained_model.h5'
+    return True
+
 
 
 def evaluate_model(**context):
+    import tensorflow as tf
     dirs = context['task_instance'].xcom_pull(task_ids='load_datasets')
-
     model = tf.keras.models.load_model('/tmp/trained_model.h5')
+
     test_ds = tf.keras.preprocessing.image_dataset_from_directory(
         dirs["test"], image_size=IMG_SIZE, batch_size=BATCH
     ).cache().prefetch(tf.data.AUTOTUNE)
 
     loss, acc = model.evaluate(test_ds)
-    
-    # Push metrics to XCom for UI visibility
     return {'accuracy': acc, 'loss': loss}
 
 
-def save_model_s3():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_path = f"hurricane_{timestamp}.h5"
 
-    os.rename('/tmp/trained_model.h5', model_path)
+def save_model_s3(**context):
+    import boto3, mlflow, os
+    from datetime import datetime
+    from airflow.hooks.base import BaseHook #type:ignore
+
+    run_id = context['task_instance'].xcom_pull(task_ids='build_and_train', key='run_id')
+
+    mlflow_conn = BaseHook.get_connection('mlflow_dagshub')
+    os.environ['MLFLOW_TRACKING_USERNAME'] = mlflow_conn.login
+    os.environ['MLFLOW_TRACKING_PASSWORD'] = mlflow_conn.password
+    mlflow.set_tracking_uri(mlflow_conn.extra_dejson['tracking_uri'])
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    tmp_model = '/tmp/trained_model.h5'
+    renamed_path = f"/tmp/hurricane_{timestamp}.h5"
+
+    if os.path.exists(tmp_model):
+        os.rename(tmp_model, renamed_path)
+    else:
+        raise FileNotFoundError(f"{tmp_model} not found before upload!")
 
     s3 = boto3.client('s3')
-    s3.upload_file(model_path, S3_BUCKET, f"models/{model_path}")
-    os.remove(model_path)
+    s3.upload_file(renamed_path, S3_BUCKET, f"models/hurricane_{timestamp}.h5")
 
-    # Auto-remove /tmp/data to free space
-    if os.path.exists(DATA_DIR):
-        shutil.rmtree(DATA_DIR)
+    s3_uri = f"s3://{S3_BUCKET}/models/hurricane_{timestamp}.h5"
 
-    return f"s3://{S3_BUCKET}/models/{model_path}"
+    with mlflow.start_run(run_id=run_id):
+        mlflow.log_param("s3_model_path", s3_uri)
+        mlflow.log_artifact(renamed_path)
+
+    # Cleanup
+    os.remove(renamed_path)
+    return s3_uri
 
 
+
+# DAG DEFINITION
 dag = DAG(
-    'hurricane_damage_training_v3',
+    'hurricane_damage_training_v5',
     default_args=default_args,
-    description='Train hurricane damage detection model with caching, cleanup, and metrics',
     schedule=None,
-    catchup=False
+    catchup=False,
+    tags=['ml', 'tensorflow', 'dagshub', 'mlflow']
 )
 
-download_task = PythonOperator(task_id='download_data', python_callable=download_data, dag=dag)
-load_task = PythonOperator(task_id='load_datasets', python_callable=load_datasets, dag=dag)
-train_task = PythonOperator(task_id='build_and_train', python_callable=build_and_train, dag=dag)
-evaluate_task = PythonOperator(task_id='evaluate_model', python_callable=evaluate_model, dag=dag)
-save_task = PythonOperator(task_id='save_model_s3', python_callable=save_model_s3, dag=dag)
+t1 = PythonOperator(task_id='download_data', python_callable=download_data, dag=dag)
+t2 = PythonOperator(task_id='load_datasets', python_callable=load_datasets, dag=dag)
+t3 = PythonOperator(task_id='build_and_train', python_callable=build_and_train, dag=dag)
+t4 = PythonOperator(task_id='evaluate_model', python_callable=evaluate_model, dag=dag)
+t5 = PythonOperator(task_id='save_model_s3', python_callable=save_model_s3, dag=dag)
 
-download_task >> load_task >> train_task >> evaluate_task >> save_task
+t1 >> t2 >> t3 >> t4 >> t5
