@@ -15,6 +15,7 @@ develop-eggs/
 dist/
 downloads/
 .eggs/
+GRAFANA_SETUP_SIMPLE.md
 parts/
 sdist/
 wheels/
@@ -28,7 +29,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
+setup_grafana.md
 # Jupyter / notebooks checkpoints
 .ipynb_checkpoints
 
@@ -54,8 +55,6 @@ tmp/
 .DS_Store
 Thumbs.db
 
-# Astronomer (.astro)
-.astro/
 
 # Local configurations
 *.local

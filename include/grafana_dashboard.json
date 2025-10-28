@@ -1,0 +1,31 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Hurricane ML Training",
+    "tags": ["ml", "airflow"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "ML Training Logs",
+        "type": "logs",
+        "datasource": {
+          "type": "loki",
+          "uid": "grafanacloud-logs"
+        },
+        "targets": [
+          {
+            "expr": "{} |= \"METRIC:\"",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 0}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "10s"
+  }
+}

@@ -1,8 +1,8 @@
-from airflow import DAG                                       # type: ignore
-from airflow.operators.python import PythonOperator           # type: ignore
-from airflow.hooks.base import BaseHook                       # type: ignore
-from datetime import datetime, timedelta
-import os, zipfile, boto3
+from airflow import DAG                                                        # type: ignore
+from airflow.operators.python import PythonOperator                            # type: ignore
+from airflow.hooks.base import BaseHook                                        # type: ignore
+from datetime import datetime, timedelta                            
+import os, zipfile, boto3                                                            
 
 # CONFIG
 S3_BUCKET = 'hurricane-damage-data'
@@ -57,6 +57,9 @@ def build_and_train(**context):
     import tensorflow as tf
     from tensorflow.keras import Sequential, Input                                                                                         #type:ignore
     from tensorflow.keras.layers import (Dense, Dropout, Conv2D, MaxPooling2D,SeparableConv2D, GlobalAveragePooling2D, Rescaling)          #type:ignore
+    import sys
+    sys.path.append('/opt/airflow/include')
+    from include.ml_metrics import GrafanaMetrics
     import warnings
     warnings.filterwarnings("ignore")
 
@@ -110,12 +113,21 @@ def build_and_train(**context):
         metrics=['accuracy']
     )
 
+    # Grafana setup (add your Grafana Cloud credentials to Airflow connections)
+    try:
+        grafana_conn = BaseHook.get_connection('grafana_cloud')
+        grafana = GrafanaMetrics(grafana_conn.host, grafana_conn.login, grafana_conn.password)
+    except:
+        grafana = None
+        print("[WARNING] Grafana connection not found, skipping metrics push")
+
     #MLflow 
     with mlflow.start_run(run_name="hurricane_training") as run:
-        history = model.fit(train_ds, validation_data=val_ds, epochs=5)
+        history = model.fit(train_ds, validation_data=val_ds, epochs=2)
 
+        # Log to MLflow
         mlflow.log_params({
-            "epochs": 5,
+            "epochs": 2,
             "batch_size": BATCH,
             "img_size": IMG_SIZE,
             "optimizer": "Adam",
@@ -126,6 +138,33 @@ def build_and_train(**context):
         mlflow.log_metric("train_loss", history.history['loss'][-1] * 100)
         mlflow.log_metric("val_loss", history.history['val_loss'][-1] * 100)
 
+        # Push logs directly to Grafana Cloud Loki
+        if grafana:
+            try:
+                for epoch in range(len(history.history['accuracy'])):
+                    metrics = {
+                        'accuracy': round(history.history['accuracy'][epoch] * 100, 2),
+                        'val_accuracy': round(history.history['val_accuracy'][epoch] * 100, 2),
+                        'loss': round(history.history['loss'][epoch], 4),
+                        'val_loss': round(history.history['val_loss'][epoch], 4)
+                    }
+                    grafana.push_training_metrics(run.info.run_id, epoch + 1, metrics)
+            except Exception as e:
+                print(f"Grafana logs failed: {e}")
+        
+        # Local backup logs
+        print("=== ML TRAINING METRICS ===")
+        for epoch in range(len(history.history['accuracy'])):
+            metrics = {
+                'epoch': epoch + 1,
+                'train_accuracy': round(history.history['accuracy'][epoch] * 100, 2),
+                'val_accuracy': round(history.history['val_accuracy'][epoch] * 100, 2),
+                'train_loss': round(history.history['loss'][epoch], 4),
+                'val_loss': round(history.history['val_loss'][epoch], 4)
+            }
+            print(f"TRAINING_METRIC: {metrics}")
+        print("=== END METRICS ===")
+
         model.save('/tmp/trained_model.h5')
         mlflow.log_artifact('/tmp/trained_model.h5', artifact_path="model")
 
@@ -135,7 +174,7 @@ def build_and_train(**context):
     return True
 
 
-
+#task-4
 def evaluate_model(**context):
     import tensorflow as tf
     dirs = context['task_instance'].xcom_pull(task_ids='load_datasets')
@@ -149,7 +188,7 @@ def evaluate_model(**context):
     return {'accuracy': acc, 'loss': loss}
 
 
-
+#task-5
 def save_model_s3(**context):
     import boto3, mlflow, os
     from datetime import datetime

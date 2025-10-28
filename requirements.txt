@@ -10,3 +10,4 @@ mlflow
 dagshub
 python-dotenv 
 prometheus-client
+requests
