@@ -1,6 +1,7 @@
 from airflow import DAG                                                        # type: ignore
 from airflow.operators.python import PythonOperator                            # type: ignore
 from airflow.hooks.base import BaseHook                                        # type: ignore
+from airflow.models import Variable                                            # type: ignore
 from datetime import datetime, timedelta                            
 import os, zipfile, boto3                                                            
 
@@ -113,7 +114,38 @@ def build_and_train(**context):
 
     #MLflow 
     with mlflow.start_run(run_name="hurricane_training") as run:
-        history = model.fit(train_ds, validation_data=val_ds, epochs=2)
+        # Push metrics to Prometheus Pushgateway (optional). Configure PUSHGATEWAY_URL in Airflow
+        # or environment (example: http://pushgateway:9091)
+        try:
+            from utils.metrics import TrainingMetricsCallback
+        except Exception as e:
+            print(f"[METRICS] Could not import TrainingMetricsCallback: {e}")
+            import traceback
+            traceback.print_exc()
+            TrainingMetricsCallback = None
+
+        callback_list = []
+        if TrainingMetricsCallback is not None:
+            # Prefer environment variable, fall back to an Airflow Variable named PUSHGATEWAY_URL
+            push_url_env = os.getenv('PUSHGATEWAY_URL')
+            push_url_var = None
+            try:
+                push_url_var = Variable.get('PUSHGATEWAY_URL', default_var=None)
+            except Exception:
+                push_url_var = None
+
+            push_url = push_url_env or push_url_var
+            source = 'env' if push_url_env else ('airflow.Variable' if push_url_var else 'none')
+            print(f"[METRICS] PUSHGATEWAY_URL resolved from {source}: {push_url}")
+
+            cb = TrainingMetricsCallback(pushgateway_url=push_url, job=f"hurricane_{run.info.run_id}", run_id=run.info.run_id)
+            callback_list.append(cb)
+        else:
+            print("[METRICS] TrainingMetricsCallback not available; no metrics will be pushed to Pushgateway")
+
+        print(f"[METRICS] callback_list size before training: {len(callback_list)}")
+
+        history = model.fit(train_ds, validation_data=val_ds, epochs=2, callbacks=callback_list)
 
         # Log to MLflow
         mlflow.log_params({
