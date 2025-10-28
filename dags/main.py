@@ -58,8 +58,6 @@ def build_and_train(**context):
     from tensorflow.keras import Sequential, Input                                                                                         #type:ignore
     from tensorflow.keras.layers import (Dense, Dropout, Conv2D, MaxPooling2D,SeparableConv2D, GlobalAveragePooling2D, Rescaling)          #type:ignore
     import sys
-    sys.path.append('/opt/airflow/include')
-    from include.ml_metrics import GrafanaMetrics
     import warnings
     warnings.filterwarnings("ignore")
 
@@ -113,14 +111,6 @@ def build_and_train(**context):
         metrics=['accuracy']
     )
 
-    # Grafana setup (add your Grafana Cloud credentials to Airflow connections)
-    try:
-        grafana_conn = BaseHook.get_connection('grafana_cloud')
-        grafana = GrafanaMetrics(grafana_conn.host, grafana_conn.login, grafana_conn.password)
-    except:
-        grafana = None
-        print("[WARNING] Grafana connection not found, skipping metrics push")
-
     #MLflow 
     with mlflow.start_run(run_name="hurricane_training") as run:
         history = model.fit(train_ds, validation_data=val_ds, epochs=2)
@@ -138,19 +128,6 @@ def build_and_train(**context):
         mlflow.log_metric("train_loss", history.history['loss'][-1] * 100)
         mlflow.log_metric("val_loss", history.history['val_loss'][-1] * 100)
 
-        # Push logs directly to Grafana Cloud Loki
-        if grafana:
-            try:
-                for epoch in range(len(history.history['accuracy'])):
-                    metrics = {
-                        'accuracy': round(history.history['accuracy'][epoch] * 100, 2),
-                        'val_accuracy': round(history.history['val_accuracy'][epoch] * 100, 2),
-                        'loss': round(history.history['loss'][epoch], 4),
-                        'val_loss': round(history.history['val_loss'][epoch], 4)
-                    }
-                    grafana.push_training_metrics(run.info.run_id, epoch + 1, metrics)
-            except Exception as e:
-                print(f"Grafana logs failed: {e}")
         
         # Local backup logs
         print("=== ML TRAINING METRICS ===")
