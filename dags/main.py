@@ -58,7 +58,7 @@ def build_and_train(**context):
     import tensorflow as tf
     from tensorflow.keras import Sequential, Input                                                                                         #type:ignore
     from tensorflow.keras.layers import (Dense, Dropout, Conv2D, MaxPooling2D,SeparableConv2D, GlobalAveragePooling2D, Rescaling)          #type:ignore
-    import sys
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3" 
     import warnings
     warnings.filterwarnings("ignore")
 
@@ -114,8 +114,7 @@ def build_and_train(**context):
 
     #MLflow 
     with mlflow.start_run(run_name="hurricane_training") as run:
-        # Push metrics to Prometheus Pushgateway (optional). Configure PUSHGATEWAY_URL in Airflow
-        # or environment (example: http://pushgateway:9091)
+        # Push metrics to Prometheus Pushgateway. Configure PUSHGATEWAY_URL in Airflow
         try:
             from utils.metrics import TrainingMetricsCallback
         except Exception as e:
@@ -186,7 +185,18 @@ def build_and_train(**context):
 #task-4
 def evaluate_model(**context):
     import tensorflow as tf
+    import mlflow
+    from airflow.hooks.base import BaseHook #type:ignore 
+
     dirs = context['task_instance'].xcom_pull(task_ids='load_datasets')
+
+    run_id = context['task_instance'].xcom_pull(task_ids='build_and_train', key='run_id')
+
+    mlflow_conn = BaseHook.get_connection('mlflow_dagshub')
+    os.environ['MLFLOW_TRACKING_USERNAME'] = mlflow_conn.login
+    os.environ['MLFLOW_TRACKING_PASSWORD'] = mlflow_conn.password
+    mlflow.set_tracking_uri(mlflow_conn.extra_dejson['tracking_uri'])
+
     model = tf.keras.models.load_model('/tmp/trained_model.h5')
 
     test_ds = tf.keras.preprocessing.image_dataset_from_directory(
@@ -194,6 +204,10 @@ def evaluate_model(**context):
     ).cache().prefetch(tf.data.AUTOTUNE)
 
     loss, acc = model.evaluate(test_ds)
+
+    with mlflow.start_run(run_id=run_id):
+        mlflow.log_metric("Test Accuracy", acc)
+        mlflow.log_metric("Test Loss", loss)
     return {'accuracy': acc, 'loss': loss}
 
 
