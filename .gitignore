@@ -22,6 +22,7 @@ wheels/
 pip-wheel-metadata/
 credentials.txt
 # Virtual environment
+
 *.env
 .env
 .venv/
