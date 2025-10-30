@@ -1,5 +1,6 @@
 astro
 .git
 .env
+
 logs/
 .venv

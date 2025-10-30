@@ -19,7 +19,7 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-#task-1
+#----------------------------------------------------------task-1----------------------------------------------------------
 def download_data():
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -39,7 +39,7 @@ def download_data():
     return os.path.join(DATA_DIR, 'dataset')
 
 
-#task-2
+#----------------------------------------------------------task-2----------------------------------------------------------
 def load_datasets(**context):
     root = context["task_instance"].xcom_pull(task_ids='download_data')
 
@@ -52,12 +52,12 @@ def load_datasets(**context):
     return dirs
 
 
-#task-3
+#----------------------------------------------------------task-3----------------------------------------------------------
 def build_and_train(**context):
     import mlflow
     import tensorflow as tf
-    from tensorflow.keras import Sequential, Input                                                                                         #type:ignore
-    from tensorflow.keras.layers import (Dense, Dropout, Conv2D, MaxPooling2D,SeparableConv2D, GlobalAveragePooling2D, Rescaling)          #type:ignore
+    from tensorflow.keras import Sequential, Input #type:ignore
+    from tensorflow.keras.layers import (Dense, Dropout, Conv2D, MaxPooling2D,SeparableConv2D, GlobalAveragePooling2D, Rescaling) #type:ignore
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3" 
     import warnings
     warnings.filterwarnings("ignore")
@@ -182,7 +182,7 @@ def build_and_train(**context):
     return True
 
 
-#task-4
+#----------------------------------------------------------task-4----------------------------------------------------------
 def evaluate_model(**context):
     import tensorflow as tf
     import mlflow
@@ -211,7 +211,7 @@ def evaluate_model(**context):
     return {'accuracy': acc, 'loss': loss}
 
 
-#task-5
+#----------------------------------------------------------task-5----------------------------------------------------------
 def save_model_s3(**context):
     import boto3, mlflow, os
     from datetime import datetime
@@ -248,9 +248,9 @@ def save_model_s3(**context):
 
 
 
-# DAG DEFINITION
+# ------------------------DAG DEFINITION----------------------------
 dag = DAG(
-    'hurricane_damage_training_v5',
+    'hurricane_damage_training',
     default_args=default_args,
     schedule=None,
     catchup=False,

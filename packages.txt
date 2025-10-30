@@ -1,0 +1,9 @@
+# System dependencies for TensorFlow
+libgomp1
+
+# Image processing libraries
+libgl1
+libglib2.0-0
+
+# SSL certificates for API requests
+ca-certificates
