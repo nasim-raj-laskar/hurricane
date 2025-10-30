@@ -52,6 +52,9 @@ class TrainingMetricsCallback(tf.keras.callbacks.Callback):
         if val_loss is not None:
             self.g_val_loss.labels(epoch=e, run_id=self.run_id).set(float(val_loss))
 
+
+
+
         if self.pushgateway_url:
             try:
                 print(f"[METRICS] Pushing metrics to {self.pushgateway_url} for job={self.job}, run_id={self.run_id}, epoch={e}")
