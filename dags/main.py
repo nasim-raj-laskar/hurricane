@@ -186,10 +186,12 @@ def build_and_train(**context):
 def evaluate_model(**context):
     import tensorflow as tf
     import mlflow
+    import numpy as np
     from airflow.hooks.base import BaseHook #type:ignore 
+    from utils.metrics import push_additional_metrics, start_continuous_mock_gpu_metrics, push_classification_metrics
+    import os
 
     dirs = context['task_instance'].xcom_pull(task_ids='load_datasets')
-
     run_id = context['task_instance'].xcom_pull(task_ids='build_and_train', key='run_id')
 
     mlflow_conn = BaseHook.get_connection('mlflow_dagshub')
@@ -204,11 +206,53 @@ def evaluate_model(**context):
     ).cache().prefetch(tf.data.AUTOTUNE)
 
     loss, acc = model.evaluate(test_ds)
+    
+    # Get predictions for classification metrics
+    y_true = np.concatenate([y for x, y in test_ds], axis=0)
+    y_pred = (model.predict(test_ds) > 0.5).astype(int).flatten()
 
     with mlflow.start_run(run_id=run_id):
         mlflow.log_metric("Test Accuracy", acc)
         mlflow.log_metric("Test Loss", loss)
+        
+        from sklearn.metrics import precision_recall_fscore_support
+        precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='binary')
+        mlflow.log_metric("F1 Score", f1)
+        mlflow.log_metric("Precision", precision)
+        mlflow.log_metric("Recall", recall)
+
+    #  Push to Prometheus
+    try:
+        from airflow.models import Variable #type:ignore
+        push_url_env = os.getenv('PUSHGATEWAY_URL')
+        push_url_var = None
+        try:
+            push_url_var = Variable.get('PUSHGATEWAY_URL', default_var=None)
+        except Exception:
+            push_url_var = None
+        push_url = push_url_env or push_url_var
+        print(f"[METRICS] Using Pushgateway URL: {push_url}")
+
+        params = {
+            "batch_size": BATCH,
+            "learning_rate": 0.001,
+            "epochs": 2,
+            "img_size": IMG_SIZE,
+            "optimizer": "Adam"
+        }
+
+        if push_url:
+            push_additional_metrics(push_url, run_id, acc, loss, params)
+            push_classification_metrics(push_url, run_id, y_true, y_pred, ['no_damage', 'damage'])
+            start_continuous_mock_gpu_metrics(push_url, run_id)
+        else:
+            print("[METRICS] Skipped pushing additional metrics (no URL found).")
+
+    except Exception as e:
+        print("[WARN] Failed to push test metrics to Prometheus:", e)
+
     return {'accuracy': acc, 'loss': loss}
+
 
 
 #----------------------------------------------------------task-5----------------------------------------------------------

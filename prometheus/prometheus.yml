@@ -11,3 +11,5 @@ scrape_configs:
       - source_labels: ["job"]
         regex: "test_.*"
         action: drop
+
+

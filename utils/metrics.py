@@ -14,7 +14,7 @@ and will not attempt to push (useful for local testing).
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 import tensorflow as tf
 from typing import Optional
-
+import random 
 
 class TrainingMetricsCallback(tf.keras.callbacks.Callback):
     def __init__(self, pushgateway_url: Optional[str] = None, job: str = "hurricane_training", run_id: Optional[str] = None):
@@ -65,3 +65,118 @@ class TrainingMetricsCallback(tf.keras.callbacks.Callback):
                 import traceback
                 print(f"[WARN] failed to push metrics to {self.pushgateway_url}")
                 traceback.print_exc()
+
+
+
+
+def push_classification_metrics(pushgateway_url: str, run_id: str, y_true, y_pred, class_names: list):
+    """
+    Push F1, precision, recall, and confusion matrix to Prometheus.
+    """
+    if not pushgateway_url:
+        return
+    
+    from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+    import numpy as np
+    
+    registry = CollectorRegistry()
+    precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='binary')
+    cm = confusion_matrix(y_true, y_pred)
+    
+    g_f1 = Gauge('f1_score', 'F1 Score', ['run_id'], registry=registry)
+    g_precision = Gauge('precision', 'Precision', ['run_id'], registry=registry)
+    g_recall = Gauge('recall', 'Recall', ['run_id'], registry=registry)
+    g_cm = Gauge('confusion_matrix', 'Confusion Matrix', ['run_id', 'true_label', 'pred_label'], registry=registry)
+    
+    g_f1.labels(run_id=run_id).set(f1)
+    g_precision.labels(run_id=run_id).set(precision)
+    g_recall.labels(run_id=run_id).set(recall)
+    
+    for i, true_label in enumerate(class_names):
+        for j, pred_label in enumerate(class_names):
+            g_cm.labels(run_id=run_id, true_label=true_label, pred_label=pred_label).set(int(cm[i][j]))
+    
+    try:
+        push_to_gateway(pushgateway_url, job=f"classification_{run_id}", registry=registry)
+        print(f"[METRICS] Pushed F1={f1:.3f}, Precision={precision:.3f}, Recall={recall:.3f}")
+    except Exception as e:
+        print(f"[WARN] Failed to push classification metrics: {e}")
+
+#Addition metics
+def push_additional_metrics(pushgateway_url: str, run_id: str, test_acc: float, test_loss: float, params: dict):
+    """
+    Push test accuracy/loss and hyperparameters to Prometheus Pushgateway.
+    """
+    if not pushgateway_url:
+        print("[METRICS] No Pushgateway URL provided. Skipping push.")
+        return
+
+    print(f"[METRICS] Pushing test metrics & hyperparameters for run_id={run_id}")
+    registry = CollectorRegistry()
+
+    # Test metrics
+    g_test_acc = Gauge('test_accuracy_percent', 'Test accuracy (percent)', ['run_id'], registry=registry)
+    g_test_loss = Gauge('test_loss', 'Test loss', ['run_id'], registry=registry)
+    g_test_acc.labels(run_id=run_id).set(test_acc * 100)
+    g_test_loss.labels(run_id=run_id).set(test_loss)
+
+    # Hyperparams
+    g_batch = Gauge('batch_size', 'Batch size used for training', ['run_id'], registry=registry)
+    g_lr = Gauge('learning_rate', 'Learning rate used for training', ['run_id'], registry=registry)
+    g_epochs = Gauge('epochs', 'Number of epochs trained', ['run_id'], registry=registry)
+    g_img_w = Gauge('img_size_width', 'Input image width', ['run_id'], registry=registry)
+    g_img_h = Gauge('img_size_height', 'Input image height', ['run_id'], registry=registry)
+    g_optimizer = Gauge('optimizer_id', 'Optimizer identifier (1=Adam,2=SGD,3=RMSProp,... )', ['run_id'], registry=registry)
+
+    g_batch.labels(run_id=run_id).set(params.get('batch_size', 0))
+    g_lr.labels(run_id=run_id).set(params.get('learning_rate', 0))
+    g_epochs.labels(run_id=run_id).set(params.get('epochs', 0))
+    g_img_w.labels(run_id=run_id).set(params.get('img_size', (0, 0))[0])
+    g_img_h.labels(run_id=run_id).set(params.get('img_size', (0, 0))[1])
+
+    opt_map = {'adam': 1, 'sgd': 2, 'rmsprop': 3}
+    g_optimizer.labels(run_id=run_id).set(opt_map.get(params.get('optimizer', '').lower(), 0))
+
+    try:
+        push_to_gateway(pushgateway_url, job=f"hurricane_{run_id}_summary", registry=registry)
+        print("[METRICS]  Successfully pushed test metrics + hyperparams.")
+    except Exception as e:
+        import traceback
+        print(f"[WARN] Failed to push additional metrics: {e}")
+        traceback.print_exc()
+
+## MOCK GPU metrics, as i dont have a gpu in my system :(
+def start_continuous_mock_gpu_metrics(pushgateway_url: str, run_id: str, interval: int = 2):
+    import math
+    import time, random, threading
+    from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+
+    def _push_loop():
+        base = random.uniform(30, 60)
+        t = 0
+        registry = CollectorRegistry()
+        g_gpu = Gauge('gpu_utilization_percent', 'Mock GPU utilization (%)', ['run_id'], registry=registry)
+        g_mem = Gauge('gpu_memory_used_mb', 'Mock GPU memory used (MB)', ['run_id'], registry=registry)
+        g_temp = Gauge('gpu_temperature_celsius', 'Mock GPU temperature (°C)', ['run_id'], registry=registry)
+        
+        while True:
+            try:
+                gpu = base + 20 * math.sin(t/10) + random.uniform(-3, 3)
+                mem = 2000 + 2000 * abs(math.sin(t/20)) + random.uniform(-100, 100)
+                temp = 55 + 10 * math.sin(t/15) + random.uniform(-2, 2)
+
+                g_gpu.labels(run_id=run_id).set(max(0, min(100, gpu)))
+                g_mem.labels(run_id=run_id).set(max(0, mem))
+                g_temp.labels(run_id=run_id).set(temp)
+
+                push_to_gateway(pushgateway_url, job=f"mock_gpu_{run_id}", registry=registry)
+                print(f"[GPU-MOCK] pushed GPU={gpu:.1f}%, MEM={mem:.0f}MB, TEMP={temp:.1f}°C")
+            except Exception as e:
+                print(f"[WARN] GPU mock push failed: {e}")
+
+            time.sleep(interval)
+            t += interval
+
+    threading.Thread(target=_push_loop, daemon=True).start()
+
+
