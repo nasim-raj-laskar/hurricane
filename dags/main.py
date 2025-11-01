@@ -291,30 +291,30 @@ def save_model_s3(**context):
     return s3_uri
 
 
-#----------------------------------------------------------task-6----------------------------------------------------------
-def cleanup_resources(**context):
-    import shutil
+# #----------------------------------------------------------task-6----------------------------------------------------------
+# def cleanup_resources(**context):
+#     import shutil
     
-    print("[CLEANUP] Starting resource cleanup...")
+#     print("[CLEANUP] Starting resource cleanup...")
     
-    # Remove dataset directory
-    if os.path.exists(DATA_DIR):
-        try:
-            shutil.rmtree(DATA_DIR)
-            print(f"[CLEANUP] Removed {DATA_DIR}")
-        except Exception as e:
-            print(f"[CLEANUP] Failed to remove {DATA_DIR}: {e}")
+#     # Remove dataset directory
+#     if os.path.exists(DATA_DIR):
+#         try:
+#             shutil.rmtree(DATA_DIR)
+#             print(f"[CLEANUP] Removed {DATA_DIR}")
+#         except Exception as e:
+#             print(f"[CLEANUP] Failed to remove {DATA_DIR}: {e}")
     
-    # Remove any remaining model files in /tmp
-    tmp_models = [f for f in os.listdir('/tmp') if f.startswith('hurricane_') and f.endswith('.h5')]
-    for model_file in tmp_models:
-        try:
-            os.remove(os.path.join('/tmp', model_file))
-            print(f"[CLEANUP] Removed /tmp/{model_file}")
-        except Exception as e:
-            print(f"[CLEANUP] Failed to remove {model_file}: {e}")
+#     # Remove any remaining model files in /tmp
+#     tmp_models = [f for f in os.listdir('/tmp') if f.startswith('hurricane_') and f.endswith('.h5')]
+#     for model_file in tmp_models:
+#         try:
+#             os.remove(os.path.join('/tmp', model_file))
+#             print(f"[CLEANUP] Removed /tmp/{model_file}")
+#         except Exception as e:
+#             print(f"[CLEANUP] Failed to remove {model_file}: {e}")
     
-    print("[CLEANUP] Cleanup completed")
+#     print("[CLEANUP] Cleanup completed")
 
 
 
@@ -332,6 +332,6 @@ t2 = PythonOperator(task_id='load_datasets', python_callable=load_datasets, dag=
 t3 = PythonOperator(task_id='build_and_train', python_callable=build_and_train, dag=dag)
 t4 = PythonOperator(task_id='evaluate_model', python_callable=evaluate_model, dag=dag)
 t5 = PythonOperator(task_id='save_model_s3', python_callable=save_model_s3, dag=dag)
-t6 = PythonOperator(task_id='cleanup_resources', python_callable=cleanup_resources, dag=dag, trigger_rule='all_done')
+# t6 = PythonOperator(task_id='cleanup_resources', python_callable=cleanup_resources, dag=dag, trigger_rule='all_done')
 
-t1 >> t2 >> t3 >> t4 >> t5 >> t6
+t1 >> t2 >> t3 >> t4 >> t5 #>>t6
