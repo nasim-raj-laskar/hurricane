@@ -320,7 +320,7 @@ def save_model_s3(**context):
 
 # ------------------------DAG DEFINITION----------------------------
 dag = DAG(
-    'hurricane_damage_training',
+    'hurricane_damage_training_mono',
     default_args=default_args,
     schedule=None,
     catchup=False,

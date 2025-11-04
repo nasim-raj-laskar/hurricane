@@ -466,7 +466,7 @@
       "targets": [
         {
           "editorMode": "builder",
-          "expr": "f1_score",
+          "expr": "max(f1_score)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -531,7 +531,7 @@
       "targets": [
         {
           "editorMode": "builder",
-          "expr": "recall",
+          "expr": "max(recall)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -596,7 +596,7 @@
       "targets": [
         {
           "editorMode": "builder",
-          "expr": "precision",
+          "expr": "max(precision)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -1118,7 +1118,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 6,
         "x": 0,
         "y": 15
       },
@@ -1150,19 +1150,93 @@
       "pluginVersion": "12.2.1",
       "targets": [
         {
-          "editorMode": "builder",
+          "editorMode": "code",
           "expr": "train_accuracy_percent",
           "legendFormat": "Train Accuracy",
           "range": true,
           "refId": "A"
-        },
-        {
-          "expr": "val_accuracy_percent",
-          "legendFormat": "Validation Accuracy",
-          "refId": "B"
         }
       ],
-      "title": "Training Accuracy vs Validation Accuracy over all epochs",
+      "title": "Training Accuracy over all epochs",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "dark-red",
+                "value": 0
+              },
+              {
+                "color": "#EAB839",
+                "value": 70
+              },
+              {
+                "color": "dark-green",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 15
+      },
+      "id": 29,
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "12.2.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "val_accuracy_percent{job=\"pushgateway\"} \r\n",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Validation Accuracy",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Validation Accuracy over all epochs",
       "type": "bargauge"
     },
     {
@@ -1886,5 +1960,5 @@
   "timezone": "",
   "title": "Dashboard-v1",
   "uid": "airflow-ml-system-go-1",
-  "version": 11
+  "version": 14
 }
