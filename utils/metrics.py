@@ -146,37 +146,33 @@ def push_additional_metrics(pushgateway_url: str, run_id: str, test_acc: float, 
         traceback.print_exc()
 
 ## MOCK GPU metrics, as i dont have a gpu in my system :(
-def start_continuous_mock_gpu_metrics(pushgateway_url: str, run_id: str, interval: int = 2):
-    import math
-    import time, random, threading
+def push_mock_gpu_metrics(pushgateway_url: str, run_id: str):
+    if not pushgateway_url:
+        print("[GPU-MOCK] No pushgateway URL provided, skipping GPU metrics")
+        return
+    
+    import random
     from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
-    def _push_loop():
-        base = random.uniform(30, 60)
-        t = 0
-        registry = CollectorRegistry()
-        g_gpu = Gauge('gpu_utilization_percent', 'Mock GPU utilization (%)', ['run_id'], registry=registry)
-        g_mem = Gauge('gpu_memory_used_mb', 'Mock GPU memory used (MB)', ['run_id'], registry=registry)
-        g_temp = Gauge('gpu_temperature_celsius', 'Mock GPU temperature (°C)', ['run_id'], registry=registry)
-        
-        while True:
-            try:
-                gpu = base + 20 * math.sin(t/10) + random.uniform(-3, 3)
-                mem = 2000 + 2000 * abs(math.sin(t/20)) + random.uniform(-100, 100)
-                temp = 55 + 10 * math.sin(t/15) + random.uniform(-2, 2)
+    registry = CollectorRegistry()
+    g_gpu = Gauge('gpu_utilization_percent', 'Mock GPU utilization (%)', ['run_id'], registry=registry)
+    g_mem = Gauge('gpu_memory_used_mb', 'Mock GPU memory used (MB)', ['run_id'], registry=registry)
+    g_temp = Gauge('gpu_temperature_celsius', 'Mock GPU temperature (°C)', ['run_id'], registry=registry)
+    
+    gpu = random.uniform(60, 85)
+    mem = random.uniform(2500, 4500)
+    temp = random.uniform(55, 75)
 
-                g_gpu.labels(run_id=run_id).set(max(0, min(100, gpu)))
-                g_mem.labels(run_id=run_id).set(max(0, mem))
-                g_temp.labels(run_id=run_id).set(temp)
+    g_gpu.labels(run_id=run_id).set(gpu)
+    g_mem.labels(run_id=run_id).set(mem)
+    g_temp.labels(run_id=run_id).set(temp)
 
-                push_to_gateway(pushgateway_url, job=f"mock_gpu_{run_id}", registry=registry)
-                print(f"[GPU-MOCK] pushed GPU={gpu:.1f}%, MEM={mem:.0f}MB, TEMP={temp:.1f}°C")
-            except Exception as e:
-                print(f"[WARN] GPU mock push failed: {e}")
-
-            time.sleep(interval)
-            t += interval
-
-    threading.Thread(target=_push_loop, daemon=True).start()
+    try:
+        push_to_gateway(pushgateway_url, job=f"mock_gpu_{run_id}", registry=registry)
+        print(f"[GPU-MOCK] Pushed GPU={gpu:.1f}%, MEM={mem:.0f}MB, TEMP={temp:.1f}°C")
+    except Exception as e:
+        import traceback
+        print(f"[WARN] GPU mock push failed: {e}")
+        traceback.print_exc()
 
 

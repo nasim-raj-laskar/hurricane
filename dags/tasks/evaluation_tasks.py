@@ -20,7 +20,7 @@ def _setup_mlflow():
 def _push_prometheus_metrics(push_url, run_id, acc, loss, y_true, y_pred):
     """Push metrics to Prometheus"""
     try:
-        from utils.metrics import push_additional_metrics, start_continuous_mock_gpu_metrics, push_classification_metrics
+        from utils.metrics import push_additional_metrics, push_mock_gpu_metrics, push_classification_metrics
 
         params = {
             "batch_size": BATCH,
@@ -32,9 +32,11 @@ def _push_prometheus_metrics(push_url, run_id, acc, loss, y_true, y_pred):
 
         push_additional_metrics(push_url, run_id, acc, loss, params)
         push_classification_metrics(push_url, run_id, y_true, y_pred, ['no_damage', 'damage'])
-        start_continuous_mock_gpu_metrics(push_url, run_id)
+        push_mock_gpu_metrics(push_url, run_id)
     except Exception as e:
+        import traceback
         print("[WARN] Failed to push test metrics to Prometheus:", e)
+        traceback.print_exc()
 
 
 def evaluate_model(**context):
