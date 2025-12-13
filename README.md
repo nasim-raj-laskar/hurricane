@@ -4,7 +4,9 @@ Hurricane Damage Training Pipeline
 ===================================
 
 An MLOps project for training a CNN model to classify hurricane damage using Apache Airflow, MLflow, and Prometheus monitoring.
+
 ![](include/assets/img/diagram-export-11-13-2025-12_18_31-AM.png)
+
 What's in the Project
 =====================
 
