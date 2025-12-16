@@ -1,7 +1,7 @@
 """Hurricane Damage Training Pipeline DAG"""
 from airflow import DAG  # type: ignore
 from airflow.operators.python import PythonOperator  # type: ignore
-from config import DEFAULT_ARGS
+from dags.config import DEFAULT_ARGS
 from tasks.data_tasks import download_data, load_datasets
 from tasks.training_tasks import build_and_train
 from tasks.evaluation_tasks import evaluate_model
