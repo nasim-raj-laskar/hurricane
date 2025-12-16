@@ -27,10 +27,13 @@ dataset.zip
 .env
 .venv/
 venv/
+.astro/
 ENV/
+ASTRONOMER_DEPLOYMENT.md
 env.bak/
 venv.bak/
 setup_grafana.md
+.vscode/
 # Jupyter / notebooks checkpoints
 .ipynb_checkpoints
 

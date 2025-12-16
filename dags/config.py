@@ -22,6 +22,7 @@ DEFAULT_ARGS = {
     'start_date': datetime(2025, 10, 26),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
+    'execution_timeout': timedelta(hours=2),
 }
 
 # MLflow Configuration

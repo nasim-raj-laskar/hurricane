@@ -4,3 +4,10 @@ astro
 research/
 logs/
 .venv
+dataset/
+dataset.zip
+docker-compose.override.yml
+credentials.txt
+*.ipynb
+.github/
+.env
