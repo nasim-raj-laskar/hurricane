@@ -2,10 +2,11 @@
 from airflow import DAG  # type: ignore
 from airflow.operators.python import PythonOperator  # type: ignore
 from dags.config import DEFAULT_ARGS
-from tasks.data_tasks import download_data, load_datasets
-from tasks.training_tasks import build_and_train
-from tasks.evaluation_tasks import evaluate_model
-from tasks.storage_tasks import save_model_s3
+from dags.tasks.data_tasks import download_data, load_datasets
+from dags.tasks.training_tasks import build_and_train
+from dags.tasks.evaluation_tasks import evaluate_model
+from dags.tasks.storage_tasks import save_model_s3
+
 
 
 # DAG Definition
