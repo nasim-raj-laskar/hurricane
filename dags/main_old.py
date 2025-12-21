@@ -10,7 +10,7 @@ S3_BUCKET = 'hurricane-damage-data'
 DATA_DIR = '/tmp/data'
 LOCAL_ZIP = os.path.join(DATA_DIR, 'dataset.zip')
 IMG_SIZE = (128, 128)
-BATCH = 16
+BATCH = 4
 
 default_args = {
     'owner': 'hurricane-team',
@@ -60,6 +60,8 @@ def build_and_train(**context):
     from tensorflow.keras.layers import (Dense, Dropout, Conv2D, MaxPooling2D,SeparableConv2D, GlobalAveragePooling2D, Rescaling) #type:ignore
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3" 
     import warnings
+    import os
+    import gc
     warnings.filterwarnings("ignore")
 
     conn = BaseHook.get_connection("mlflow_dagshub")
@@ -178,7 +180,8 @@ def build_and_train(**context):
 
         # Push run_id for next tasks
         context['task_instance'].xcom_push(key='run_id', value=run.info.run_id)
-
+    tf.keras.backend.clear_session()
+    gc.collect()
     return True
 
 
