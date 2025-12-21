@@ -19,7 +19,7 @@ def _setup_mlflow():
 def _push_prometheus_metrics(push_url, run_id, acc, loss, y_true, y_pred):
     """Push metrics to Prometheus"""
     try:
-        from utils.metrics import (
+        from dags.utils.metrics import (
             push_additional_metrics,
             push_mock_gpu_metrics,
             push_classification_metrics,

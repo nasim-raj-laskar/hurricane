@@ -65,7 +65,7 @@ def _build_model():
 def _get_callbacks(run_id):
     """Get training callbacks"""
     try:
-        from utils.metrics import TrainingMetricsCallback
+        from dags.utils.metrics import TrainingMetricsCallback
     except Exception as e:
         print(f"[METRICS] Could not import TrainingMetricsCallback: {e}")
         return []
