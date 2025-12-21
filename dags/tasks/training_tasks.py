@@ -92,6 +92,8 @@ def build_and_train(**context):
     import warnings
     import tensorflow as tf
     import mlflow
+    import os
+    import gc
 
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
     warnings.filterwarnings("ignore")
@@ -102,11 +104,20 @@ def build_and_train(**context):
     dirs = ti.xcom_pull(task_ids="load_datasets")
 
     train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["train"], image_size=IMG_SIZE, batch_size=BATCH
+        dirs["train"], 
+        image_size=IMG_SIZE,
+        batch_size=BATCH,
+        shuffle=True
     )
     val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        dirs["val"], image_size=IMG_SIZE, batch_size=BATCH
+        dirs["val"], 
+        image_size=IMG_SIZE, 
+        batch_size=BATCH,
+        shuffle=False
     )
+
+    train_ds=train_ds.prefetch(1)
+    val_ds=val_ds.prefetch(1)
 
     model = _build_model()
 
@@ -118,6 +129,8 @@ def build_and_train(**context):
             validation_data=val_ds,
             epochs=EPOCHS,
             callbacks=callbacks,
+            workers=1,
+            use_multiprocessing=False
         )
 
         # Log parameters
@@ -157,5 +170,9 @@ def build_and_train(**context):
         mlflow.log_artifact("/tmp/trained_model.h5", artifact_path="model")
 
         ti.xcom_push(key="run_id", value=run.info.run_id)
+
+    # Cleanup
+    tf.keras.backend.clear_session()
+    gc.collect()
 
     return True

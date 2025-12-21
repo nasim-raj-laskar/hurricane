@@ -11,7 +11,7 @@ LOCAL_ZIP = os.path.join(DATA_DIR, 'dataset.zip')
 
 # Model Configuration
 IMG_SIZE = (128, 128)
-BATCH = 16
+BATCH = 4
 EPOCHS = 2
 LEARNING_RATE = 0.001
 OPTIMIZER = "Adam"
