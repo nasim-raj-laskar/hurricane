@@ -349,3 +349,10 @@ MLFLOW_EXPERIMENT_NAME = "hurricane_damage_training_v5"
 | Deployment | Astronomer Cloud | - |
 | Version Control | GitHub | - |
 | Remote Tracking | DagsHub | - |
+
+## 🧊 Project Status
+
+This project is feature-complete and archived.
+Infrastructure (EC2, Astronomer deployment) is intentionally hibernated to avoid unnecessary cloud costs.
+
+The system was validated end-to-end with real training runs, live monitoring, and artifact storage.
